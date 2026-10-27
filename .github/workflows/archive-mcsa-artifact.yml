@@ -1,0 +1,73 @@
+name: Archive completed MCSA study outputs
+
+on:
+  push:
+    branches: [mcsa-eight-benchmark-20261027]
+    paths:
+      - '.github/workflows/archive-mcsa-artifact.yml'
+  workflow_dispatch:
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mcsa-eight-benchmark-20261027
+
+      - name: Download successful full-study artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ARTIFACT_ID: '12719018734'
+        run: |
+          set -euxo pipefail
+          rm -rf /tmp/mcsa-artifact final_outputs
+          mkdir -p /tmp/mcsa-artifact final_outputs
+          curl -L --fail \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            -o /tmp/mcsa-artifact/artifact.zip
+          unzip -q /tmp/mcsa-artifact/artifact.zip -d /tmp/mcsa-artifact/top
+          find /tmp/mcsa-artifact/top -maxdepth 6 -type f -print
+
+      - name: Extract and organize outputs
+        run: |
+          set -euxo pipefail
+          mkdir -p final_outputs/package final_outputs/results/eight_method final_outputs/results/elaia_mcsa
+          NESTED=$(find /tmp/mcsa-artifact/top -name 'MCSA_complete_research_package.zip' -print -quit)
+          if [ -n "$NESTED" ]; then
+            cp "$NESTED" final_outputs/MCSA_complete_research_package.zip
+            unzip -q "$NESTED" -d /tmp/mcsa-artifact/nested
+          fi
+          PDF=$(find /tmp/mcsa-artifact -name 'MCSA_Chinese_Manuscript.pdf' -print -quit)
+          if [ -n "$PDF" ]; then cp "$PDF" final_outputs/MCSA_Chinese_Manuscript.pdf; fi
+          TEX=$(find /tmp/mcsa-artifact -name 'main_cn.tex' -print -quit)
+          if [ -n "$TEX" ]; then cp "$TEX" final_outputs/main_cn.tex; fi
+          for f in summary.csv replications.csv paired_vs_mcsa.csv metadata.json findings.json; do
+            SRC=$(find /tmp/mcsa-artifact -path '*eight_method*' -name "$f" -print -quit)
+            if [ -n "$SRC" ]; then cp "$SRC" "final_outputs/results/eight_method/$f"; fi
+          done
+          for f in elaia_mcsa_results.csv elaia_mcsa_audit_scores.csv provenance.json; do
+            SRC=$(find /tmp/mcsa-artifact -path '*elaia_mcsa*' -name "$f" -print -quit)
+            if [ -n "$SRC" ]; then cp "$SRC" "final_outputs/results/elaia_mcsa/$f"; fi
+          done
+          find /tmp/mcsa-artifact/nested -type f \( -name '*.py' -o -name '*.R' -o -name '*.js' -o -name '*.txt' -o -name '*.tex' \) -exec cp {} final_outputs/package/ \; || true
+          find final_outputs -type f -maxdepth 5 -print
+
+      - name: Commit generated outputs to isolated branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add final_outputs
+          if git diff --cached --quiet; then
+            echo 'No generated changes to commit.'
+          else
+            git commit -m 'Archive completed MCSA benchmark and audit outputs [skip ci]'
+            git push origin HEAD:mcsa-eight-benchmark-20261027
+          fi
