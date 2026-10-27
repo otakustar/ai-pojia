@@ -1,0 +1,94 @@
+name: Postprocess final MCSA diagnostics
+
+on:
+  push:
+    branches: [mcsa-eight-benchmark-20261027]
+    paths:
+      - '.github/workflows/postprocess-mcsa-results.yml'
+  workflow_dispatch:
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mcsa-eight-benchmark-20261027
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pandas numpy pypdf
+      - name: Derive compact diagnostic outputs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import pandas as pd
+          from pypdf import PdfReader
+
+          root=Path('final_outputs')
+          s=pd.read_csv(root/'results/eight_method/summary.csv')
+          p=pd.read_csv(root/'results/eight_method/paired_vs_mcsa.csv')
+          e=pd.read_csv(root/'results/elaia_mcsa/elaia_mcsa_results.csv')
+          methods=['no_update','unrestricted_retrain','transport_aipw_safe','aml_point','best_single_safe','qaggregation_safe','krr_transfer_safe','mcsa']
+          scenarios=['direction_favorable','regular_overlap','null_update','radius_misspecified']
+
+          selected=s[['scenario','n','method','mean_risk_change','mcse_risk_change','mean_harm','mean_harm_size','mean_coverage','mean_accepted','mean_detected_benefit','mean_runtime_sec','mean_positive_harm','max_positive_harm','opportunity_rate']].copy()
+          selected.to_csv(root/'selected_results.csv',index=False)
+
+          lines=['# Final MCSA benchmark diagnostics','',
+                 'All entries below come from 300 paired repetitions per scenario/sample-size cell.','',
+                 '## Mean risk change / harm / acceptance','']
+          for sc in scenarios:
+            lines += [f'### {sc}','', '| n | method | risk change | harm | coverage | accepted | detected |', '|---:|---|---:|---:|---:|---:|---:|']
+            ss=s[s.scenario==sc].set_index(['n','method'])
+            for n in sorted(s.n.unique()):
+              for m in methods:
+                if (n,m) not in ss.index: continue
+                r=ss.loc[(n,m)]
+                def f(x): return '--' if pd.isna(x) else f'{x:.6f}'
+                lines.append(f'| {n} | {m} | {f(r.mean_risk_change)} | {f(r.mean_harm)} | {f(r.mean_coverage)} | {f(r.mean_accepted)} | {f(r.mean_detected_benefit)} |')
+            lines.append('')
+
+          fav=p[p.scenario=='direction_favorable'].copy()
+          lines += ['## Paired comparisons in direction_favorable','',
+                    'Positive method-minus-MCSA risk favors MCSA.','',
+                    '| n | method minus MCSA | mean | 95% low | 95% high |',
+                    '|---:|---|---:|---:|---:|']
+          for _,r in fav.iterrows():
+            lines.append(f'| {int(r.n)} | {r.method_minus_mcsa} | {r.mean_difference:.6f} | {r.ci_low:.6f} | {r.ci_high:.6f} |')
+
+          primary=e[(e.R==1.0)&(e.multiplicity=='familywise')].copy()
+          lines += ['', '## Final six-hospital MCSA primary audit', '',
+                    '| hospital | audit n | theta prediction | theta supported | certified lower gain | audit risk change | CI low | CI high |',
+                    '|---:|---:|---:|---:|---:|---:|---:|---:|']
+          for _,r in primary.iterrows():
+            lines.append(f'| {r.hospital} | {int(r.n_target_audit)} | {r.theta_prediction:.6f} | {r.theta_supported:.6f} | {r.certified_lower_gain:.6f} | {r.audit_risk_change:.6f} | {r.audit_ci_low:.6f} | {r.audit_ci_high:.6f} |')
+
+          pages=len(PdfReader(root/'MCSA_Chinese_Manuscript.pdf').pages)
+          lines += ['', f'Compiled Chinese PDF pages: {pages}.', '']
+          (root/'diagnostic_summary.md').write_text('\n'.join(lines),encoding='utf-8')
+
+          facts={
+            'pdf_pages':pages,
+            'mcsa_nonzero_favorable_cells':int(((s.scenario=='direction_favorable')&(s.method=='mcsa')&(s.mean_accepted>0)).sum()),
+            'mcsa_nonzero_all_cells':int(((s.method=='mcsa')&(s.mean_accepted>0)).sum()),
+            'mcsa_primary_hospital_updates':int(primary.updated.sum()),
+            'max_harm_deployable_theory_conditions':float(s[(s.method.isin(['no_update','transport_aipw_safe','best_single_safe','qaggregation_safe','krr_transfer_safe','mcsa']))&(s.scenario!='radius_misspecified')].mean_harm.max()),
+            'method_max_harm_deployable_theory_conditions':s.loc[(s.method.isin(['no_update','transport_aipw_safe','best_single_safe','qaggregation_safe','krr_transfer_safe','mcsa']))&(s.scenario!='radius_misspecified')].sort_values('mean_harm',ascending=False).iloc[0].method,
+            'fav_pair_ci_support_mcsa':int((fav.ci_low>0).sum()),
+            'fav_pair_ci_against_mcsa':int((fav.ci_high<0).sum()),
+            'fav_pair_total':int(len(fav)),
+          }
+          (root/'diagnostic_facts.json').write_text(json.dumps(facts,indent=2),encoding='utf-8')
+          print(json.dumps(facts,indent=2))
+          PY
+      - name: Commit diagnostics
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add final_outputs/diagnostic_summary.md final_outputs/diagnostic_facts.json final_outputs/selected_results.csv
+          git commit -m 'Add compact diagnostics for completed MCSA study [skip ci]'
+          git push origin HEAD:mcsa-eight-benchmark-20261027
