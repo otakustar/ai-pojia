@@ -1,0 +1,469 @@
+\documentclass[UTF8,12pt]{ctexart}
+\usepackage[a4paper,margin=2.45cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,booktabs,longtable,array,graphicx,hyperref,setspace,enumitem}
+\doublespacing
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue}
+\newtheorem{theorem}{定理}
+\newtheorem{corollary}{推论}
+\newtheorem{proposition}{命题}
+\newtheorem{lemma}{引理}
+\newtheorem{assumption}{假设}
+\newtheorem{remark}{说明}
+\newcommand{\E}{\mathbb E}
+\newcommand{\Prb}{\mathbb P}
+\newcommand{\R}{\mathcal R}
+\newcommand{\F}{\mathcal F}
+\newcommand{\V}{\mathcal V}
+\newcommand{\norm}[1]{\left\lVert #1\right\rVert}
+\newcommand{\op}{\mathrm{op}}
+
+\title{未知协变量偏移下历史CATE模型的安全更新：\\
+两样本信息模量、方向选择代价与最小最大遗憾}
+\author{作者信息投稿时补充}
+\date{2026年10月27日}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+本文研究一个已经锁定的条件平均处理效应（CATE）模型在目标人群发生协变量偏移时是否应当更新，以及如何在控制有害更新概率的同时保留数据能够支持的目标风险改善。与重新估计整条目标CATE函数不同，本文把问题表述为带安全约束的统计决策：更新方向的线性因果信号、目标二次Gram矩阵及其不确定性共同决定最终风险。我们首先给出目标独有区域下方向风险信号的尖锐部分识别区间，分离不可识别损失与有限样本统计损失。其次证明一个同损失化归：若方向信号向量在目标Gram几何中具有半径$r$的诚实置信球，则鲁棒径向软阈值产生的更新以至少$1-\alpha$的概率不劣于历史模型，并且在覆盖事件上相对方向空间内oracle的遗憾不超过$4r^2$；反向的两点信息模量下界表明，任何$\alpha$安全规则都必须支付同阶的平方模量代价。我们进一步在固定finite-sieve模型中构造可计算的联合AML/Riesz置信球，并在同一安全决策损失下给出条件Gaussian最小最大匹配阶。未知倾向得分和结果回归通过交叉拟合正交评分进入乘积余项；目标样本有限、弱重叠、目标独有区域和数据学习方向的复杂度被分别计费。稠密$d$维方向的选择代价为$d/n$阶，$M$条近似正交稀疏方向的代价为$\log(M)/n$阶。
+
+数值部分采用统一来源标签、目标协变量、候选字典、随机重复和最终目标风险，比较不更新、自由重训、Transport-AIPW、AML/Riesz点更新、最优单方向安全更新、Causal Q-Aggregation、KRR迁移学习和本文的模量校准安全聚合（MCSA）。自由重训和AML点更新作为未施加安全约束的性能参照，其余可部署方法使用相同5\%最终门槛。我们同时报告理论有利区、良好重叠区、无改善区和函数类半径错设压力区，并保留全部不利结果。真实数据部分在公开ELAIA-1处理版数据上进行六医院地理留出；主分析用最终finite-sieve MCSA置信球、医院族错误率调整和独立目标结局审计。本文的贡献不是Riesz估计、Q-aggregation、局部风险证书或dShrink本身，而是把迁移因果方向的信息模量、支持缺失、方向选择和安全更新统一到同一最终决策遗憾中。
+\end{abstract}
+
+\noindent\textbf{关键词：}条件平均处理效应；协变量偏移；安全模型更新；最小最大遗憾；部分识别；弱重叠；Riesz表示；Q-aggregation。
+
+\section{引言}
+历史CATE模型往往是需要维护的统计对象，而不是每次新数据到来后都可随意丢弃的估计量。设$g$为在既有数据和流程上训练并锁定的模型，来源人群提供处理和结局，目标人群主要提供协变量。无限制重训可能降低平均误差，也可能因弱重叠、迁移权重不稳定或nuisance学习误差而破坏一个已经可用的历史模型。
+
+本文关注的问题是：
+\begin{quote}
+在什么条件下，数据能够认证某个更新确实改善目标CATE平方风险；这种认证不可避免的信息代价是多少；是否存在达到该代价的可计算更新规则？
+\end{quote}
+
+令目标CATE为$h_Q$，定义
+\[
+\R_Q(f)=\E_Q\{f(X)-h_Q(X)\}^2.
+\]
+对更新$u$，目标改善为
+\begin{equation}
+J_Q(u)=\R_Q(g)-\R_Q(g+u)
+=2\E_Q[u(X)\{h_Q(X)-g(X)\}]-\E_Q\{u(X)^2\}.
+\label{eq:gain}
+\end{equation}
+未知的$\E_Qh_Q^2$消去，因此局部更新可能在完整目标CATE不可学习时仍可识别和估计。
+
+本文的核心不是再引入一个迁移估计器，而是建立以下同损失链条：
+\[
+\boxed{
+\text{迁移因果方向的信息模量}
+\Longrightarrow
+\text{诚实置信半径}
+\Longrightarrow
+\text{鲁棒安全更新}
+\Longrightarrow
+\text{平方模量阶的安全minimax regret}.}
+\]
+同时把三个性质不同的代价分开并统一到最终边界：
+\[
+\boxed{
+\text{目标独有区域的识别损失}
++
+\text{共同支持内的统计信息损失}
++
+\text{数据学习方向的选择损失}.}
+\]
+
+与最接近文献的差异如下。Qiu等研究一般数据移位下的风险差估计；Hirshberg和Wager及Mou等研究线性泛函的最小最大估计与弱重叠；Lan和Syrgkanis研究普通CATE候选聚合的oracle regret；Song研究局部总体风险置信场；Wang和Lin研究异质外部摘要的分量收缩。这些工具均不是本文首创。本文新增的对象是两样本因果迁移下、以历史模型为安全基线、对最终有害更新概率加约束的二次决策遗憾，并将其与方向信息模量建立同尺度上下界。
+
+\section{数据结构、模型类与统一决策损失}
+来源样本为$O_i=(X_i,A_i,Y_i)\sim P$，$i=1,\ldots,n$；目标开发样本为$Z_j\sim Q_X$，$j=1,\ldots,m$，仅含协变量。假设一致性及来源条件可交换性。记
+\[
+e(x)=P(A=1\mid X=x),\qquad
+m_a(x)=\E(Y\mid A=a,X=x),\qquad
+h_P=m_1-m_0.
+\]
+历史模型$g$在当前认证数据出现前固定。
+
+\begin{assumption}[受限但广泛的非参数因果类]\label{ass:model}
+\begin{enumerate}[label=(A\arabic*)]
+\item 共同支持区域$S$上$h_Q=h_P$；目标独有区域$U=S^c$上$|h_Q-g|\le H$。
+\item $S$上$\kappa_n\le e\le1-\kappa_n$，其中$\kappa_n$允许随$n$减小；结果残差条件次高斯。
+\item 历史残差$f=h_P-g$属于预先声明的闭、凸、对称函数类$\F_R$。主要正面结果先在finite sieve或给定RKHS球上陈述。
+\item $e,m_a$属于原始Hölder类，并有交叉拟合$L_2(P)$收敛率$a_{e,n},a_{m,n}$。
+\item 候选方向字典$v=(v_1,\ldots,v_d)^\top$由独立pilot样本固定，且有界。目标Gram矩阵$G=Q(vv^\top)$在活动空间满足$\lambda_{\min}(G)\ge\lambda_0>0$。
+\item 来源样本与目标样本独立；维数$d$满足所采用联合Gaussian或乘子近似的条件。
+\end{enumerate}
+\end{assumption}
+
+对$\theta\in\Theta$，令$u_\theta=v^\top\theta$，其中$0\in\Theta$，并定义
+\[
+B=Q\{v(h_Q-g)\},\qquad G=Q(vv^\top).
+\]
+于是
+\begin{equation}
+J(\theta)=2B^\top\theta-\theta^\top G\theta.
+\label{eq:quadratic}
+\end{equation}
+若不加系数限制，oracle为$\theta^*=G^{-1}B$，收益为$J^*=B^\top G^{-1}B$。
+
+定义$\alpha$安全决策类
+\[
+\mathfrak D_\alpha=
+\left\{\widehat\theta:
+\sup_{P\in\mathcal P}P_P\{J_P(\widehat\theta)<0\}\le\alpha
+\right\}.
+\]
+本文所有上下界均针对同一损失
+\begin{equation}
+\mathfrak R^*_{n,m}=
+\inf_{\widehat\theta\in\mathfrak D_\alpha}
+\sup_{P\in\mathcal P}
+\E_P\{J_P^*-J_P(\widehat\theta)\}.
+\label{eq:minimax}
+\end{equation}
+
+\section{方向相关的尖锐部分识别}
+\begin{theorem}[目标独有区域的尖锐识别集]\label{thm:id}
+设$S$为来源支持区域，$U=S^c$。$S$上$h_Q=h_P$，$U$上仅知$|h_Q-g|\le H$。对固定方向$u$，令
+\[
+B_S=Q\{u(h_P-g)1_S\},\quad
+\delta_U=H Q(|u|1_U),\quad
+A_u=Q(u^2).
+\]
+则$B_u=Q\{u(h_Q-g)\}$的尖锐识别集为
+\[
+[B_S-\delta_U,B_S+\delta_U].
+\]
+对$t\ge0$，$J_Q(tu)$的尖锐识别集为
+\[
+[2t(B_S-\delta_U)-t^2A_u,\;2t(B_S+\delta_U)-t^2A_u].
+\]
+\end{theorem}
+\begin{proof}
+目标独有区域的贡献绝对值不超过$H Q(|u|1_U)$。分别取$h_Q-g=\pm H\operatorname{sign}(u)$可达到两端，并且不改变任何来源观测分布或目标协变量分布。代入式\eqref{eq:gain}即可。
+\end{proof}
+
+\begin{corollary}
+若$B_S\le\delta_U$，不存在统一可认证的正步长；若$B_S>\delta_U$且$A_u>0$，则任意
+\[
+0<t<\min\{1,2(B_S-\delta_U)/A_u\}
+\]
+在整个识别类上均有严格正收益。
+\end{corollary}
+
+\section{信息模量与同损失minimax化归}
+对产品实验$\mathcal E_{n,m}=P^n\times Q_X^m$，定义标准化方向信息模量
+\[
+\omega_{n,m}(\eta;P_0)=
+\sup\left\{
+\norm{G^{-1/2}\{B(P)-B(P_0)\}}_2:
+H\{\mathcal E_{n,m}(P),\mathcal E_{n,m}(P_0)\}\le\eta
+\right\}.
+\]
+
+\begin{theorem}[鲁棒径向软阈值]\label{thm:soft}
+若$G$正定，且
+\[
+\mathcal E_r=\{\norm{G^{-1/2}(\widehat B-B)}_2\le r\}
+\]
+的概率至少为$1-\alpha$，令
+\[
+y=G^{-1/2}\widehat B,\qquad
+\widehat z=\left(1-\frac r{\norm y_2}\right)_+y,\qquad
+\widehat\theta=G^{-1/2}\widehat z.
+\]
+则在$\mathcal E_r$上
+\[
+J(\widehat\theta)\ge0,\qquad
+J^*-J(\widehat\theta)\le4r^2.
+\]
+所以该规则为$\alpha$安全。
+\end{theorem}
+\begin{proof}
+令$b=G^{-1/2}B,z=G^{1/2}\theta$。则
+\[
+J(z)=2b^\top z-\norm z_2^2=\norm b_2^2-\norm{z-b}_2^2.
+\]
+置信球上的最坏情形下界为$2y^\top z-\norm z^2-2r\norm z$，其最大化解为$\widehat z$。零更新可行，因此下界非负。又
+$\norm{b-\widehat z}\le\norm{b-y}+\norm{y-\widehat z}\le2r$，故遗憾不超过$4r^2$。
+\end{proof}
+
+\begin{theorem}[同损失信息模量下界]\label{thm:lower}
+若模型类包含$B(P_0)=0$的零改善分布$P_0$和满足
+$\norm{G^{-1/2}B(P_1)}_2=\delta$的分布$P_1$，且两个产品实验的总变差距离不超过$\eta$，则任何$\alpha$安全规则满足
+\[
+\E_{P_1}\{J_{P_1}^*-J_{P_1}(\widehat\theta)\}
+\ge(1-\alpha-\eta)\delta^2.
+\]
+\end{theorem}
+\begin{proof}
+$P_0$下任意非零更新均有害，故安全性要求$P_0(\widehat\theta\ne0)\le\alpha$。总变差不等式给出$P_1(\widehat\theta=0)\ge1-\alpha-\eta$；在该事件上遗憾等于$\delta^2$。
+\end{proof}
+
+\begin{corollary}
+若诚实置信球半径达到方向信息模量的常数倍，且模型类包含达到该模量的零--有益局部备择，则式\eqref{eq:minimax}与$\omega_{n,m}^2$同阶。
+\end{corollary}
+
+\section{finite-sieve主定理与可计算联合置信球}
+本节把原补充材料中的finite-sieve结果提升为主理论。条件于pilot样本，方向字典$v$和nuisance估计固定。在来源认证样本上，设
+\begin{equation}
+\widetilde Y_i=f(X_i)+\varepsilon_i+\delta_i,
+\qquad
+\varepsilon_i\mid X_i\sim N(0,\sigma_i^2),
+\label{eq:pseudo}
+\end{equation}
+并假设
+\begin{equation}
+f(x)=\psi(x)^\top\beta+r_K(x),\qquad
+\norm\beta_2\le R,\qquad
+\norm{r_K}_\infty\le a_K.
+\label{eq:sieve}
+\end{equation}
+
+令
+\[
+M_Q=Q\{v\psi^\top\},\quad
+B=Q(vf),\quad
+G=Q(vv^\top),
+\]
+目标样本提供$\widehat M_Q$和$\widehat G$。对$n\times d$权重矩阵$W$，定义
+\[
+\widehat B_W=n^{-1}W^\top\widetilde Y,\quad
+D_W=\widehat M_Q-n^{-1}W^\top\Psi,\quad
+\Sigma_W=n^{-2}W^\top\Omega W.
+\]
+
+\begin{lemma}[来源误差分解]\label{lem:decomp}
+条件于设计与pilot样本，
+\[
+\widehat B_W-B
+=-D_W\beta+n^{-1}W^\top\varepsilon
++R_{K,W}+R_{\delta,W}+R_{Q,W}.
+\]
+并且
+\[
+\norm{G^{-1/2}D_W\beta}
+\le R\norm{G^{-1/2}D_W}_{\op}.
+\]
+其余三项分别由sieve近似包络、正交nuisance余项及目标经验过程控制。
+\end{lemma}
+
+定义
+\[
+\rho_P(W)=
+R\norm{G^{-1/2}D_W}_{\op}
++q_{1-\alpha_P}(G^{-1/2}\Sigma_WG^{-1/2})
++b_{K,W}+b_{n,W},
+\]
+以及
+\[
+\rho_Q=c_Q\sqrt{\frac{d+\log(1/\alpha_Q)}m}.
+\]
+
+\begin{theorem}[finite-sieve诚实置信球]\label{thm:sievecb}
+若$G$在活动方向空间正定，方向字典独立于来源认证结局，式\eqref{eq:pseudo}条件Gaussian，且$R,a_K,b_{n,W},c_Q$和支持缺失项$\Delta_U$均为有效界，则当$\alpha_P+\alpha_Q+\alpha_G\le\alpha$时，
+\[
+\norm{G^{-1/2}(\widehat B_W-B)}_2
+\le\rho_P(W)+\rho_Q+\Delta_U
+\]
+以至少$1-\alpha$的概率成立。与$G$的谱上界结合后，定理\ref{thm:soft}给出安全更新。
+\end{theorem}
+\begin{proof}
+由引理\ref{lem:decomp}，函数类不平衡、sieve近似误差和nuisance误差由确定性包络控制；标准化来源噪声条件Gaussian；目标向量均值和Gram矩阵由向量Bernstein或有界差分不等式控制；$\Delta_U$在声明的部分识别类上为确定性项。对各事件取交并使用并集界。
+\end{proof}
+
+权重在观察来源认证结局前求解
+\[
+\widehat W\in\arg\min_W
+\left\{
+R\norm{\widehat G^{-1/2}D_W}_{\op}
++q_{1-\alpha_P}(\widehat G^{-1/2}\widehat\Sigma_W\widehat G^{-1/2})
++b_{K,W}+b_{n,W}
+\right\}.
+\]
+在固定协方差上界下这是凸范数优化；RKHS中将有限维不平衡替换为核均值嵌入不平衡。
+
+\begin{theorem}[同损失条件minimax匹配阶]\label{thm:matching}
+考虑$r_K=0,\delta=0$、来源设计固定、$M_Q,G$已知的Gaussian线性子模型。令
+\[
+I_n=\Psi^\top\Omega^{-1}\Psi,
+\]
+并定义局部模量
+\[
+\omega(\eta)=
+\sup\left\{
+\norm{G^{-1/2}M_Qd}_2:
+\norm d_2\le2R,
+\ d^\top I_nd\le\eta^2
+\right\}.
+\]
+若参数类包含零改善点及达到模量的对称局部备择，则任意$\alpha$安全规则的最坏预期oracle遗憾至少为$c_\alpha\omega(\eta_0)^2$；由上式权重、定理\ref{thm:sievecb}和定理\ref{thm:soft}构成的规则，其遗憾至多为$C_\alpha\omega(\eta_1)^2$加目标抽样、sieve近似、nuisance和支持缺失余项。因此该固定finite-sieve模型中的安全minimax regret与方向模量平方同阶。
+\end{theorem}
+\begin{proof}
+下界选择达到局部模量的$d$，比较参数$\beta_0$与$\beta_0+d$。两Gaussian实验的KL散度为$d^\top I_nd/2$，故固定$\eta_0$时总变差有常数上界；在零点，安全规则非零更新概率不超过$\alpha$，该事件转移至有益局部备择后产生模量平方阶遗憾。上界由最小最大线性恢复得到模量阶置信半径，再由定理\ref{thm:soft}平方化。
+\end{proof}
+
+\begin{remark}
+定理\ref{thm:matching}是同一安全决策损失下的真实matching-rate结果，但条件为固定sieve、已知或声明的半径及固定方向字典。未知光滑度的诚实适应需要self-similarity、polished-tail或其他附加条件；本文不声称无条件自适应。
+\end{remark}
+
+\section{未知nuisance、弱重叠与方向复杂度}
+使用交叉拟合正交伪响应
+\[
+\widehat\phi=\widehat m_1-\widehat m_0
++\frac A{\widehat e}(Y-\widehat m_1)
+-\frac{1-A}{1-\widehat e}(Y-\widehat m_0).
+\]
+若$\Gamma_V$是方向Riesz图的适当范数，则
+\[
+b_n
+\lesssim
+\Gamma_V
+\norm{\widehat e-e}_{P,2}
+\max_a\norm{\widehat m_a-m_a}_{P,2}.
+\]
+因此nuisance只在乘积率低于主要信息半径时可忽略，否则必须显式加入置信球。
+
+正则重叠下，固定方向的两样本有效协方差为
+\[
+\Sigma_B=
+\frac1nE_P\left[
+ r^2vv^\top\left\{
+\frac{\sigma_1^2}{e}+
+\frac{\sigma_0^2}{1-e}
+\right\}
+\right]
++
+\frac1m\operatorname{Var}_Q\{v(h-g)\}.
+\]
+该式说明全局密度比ESS并非正确难度指标，只有活动方向经过区域的迁移和处理噪声进入信息量。常规方差发散时，以$\F_R$上的方向最小最大线性/RKHS模量替代。
+
+稠密$d$维方向空间的安全regret选择代价为$d/n$阶；从$M$条近似正交稀疏方向中选择的代价为$\log(M)/n$阶。该阶数本身与CATE Q-aggregation文献有关，本文新增的是它与迁移模量、目标样本误差、支持缺失和安全约束共同进入同一决策边界。
+
+\section{MCSA算法}
+本文方法称为模量校准安全聚合（MCSA）：
+\begin{enumerate}[label=步骤\arabic*.]
+\item 在审计结局出现前锁定历史模型、估计目标、函数类半径、目标独有区包络、候选生成规则和$\alpha$。
+\item 使用独立pilot样本构造有界方向字典，并包含零更新。
+\item 交叉拟合$e,m_a$及正交伪响应。
+\item 对方向信号向量求解联合AML/Riesz权重，分别记录来源噪声、函数类不平衡、目标经验误差、nuisance余项和不可识别半径。
+\item 构造$B$的椭球置信集及$G$的谱上界。
+\item 求解鲁棒二次规划
+\[
+\max_{\theta\in\Theta}
+\left\{
+2\widehat B^\top\theta-	heta^\top\widehat G\theta
+-2r_B\norm{\widehat G^{1/2}\theta}_2
+-\eta_G\norm\theta_2^2
+\right\}.
+\]
+若认证下界非正则返回$g$。
+\item 规则完全锁定后，才读取独立目标审计结局。
+\end{enumerate}
+
+\section{八方法同预算模拟}
+\subsection{比较原则}
+所有方法使用相同的历史模型、来源标签总量、目标协变量总量、候选字典和随机重复。来源标签一次性划分为候选/nuisance训练40\%、方法选择30\%及最终认证30\%；目标协变量分为选择和认证两半。六种可部署方法统一使用5\%最终门槛。自由重训和AML/Riesz点更新按其定义作为未加安全门槛的性能参照，不被描述为满足相同安全保证。
+
+八种方法为：不更新、自由重训、Transport-AIPW加门槛、AML/Riesz点更新、最优单方向安全更新、Causal Q-Aggregation加门槛、KRR迁移加门槛以及MCSA。Q-Aggregation使用原文的Q目标函数并适配目标权重；KRR迁移是COKE思想的同级适配实现，而不是原论文代码的逐字复现。
+
+场景包括：方向可认证的大偏移、常规良好重叠、历史模型正确的零改善场景及函数类半径/包络错设压力场景。最后一个场景用于展示定理条件外的失效，不能用于验证理论。
+
+\IfFileExists{generated/eight_method_main.tex}{\input{generated/eight_method_main.tex}}{}
+\IfFileExists{generated/paired_favorable.tex}{\input{generated/paired_favorable.tex}}{}
+
+\paragraph{总体发现。}
+\IfFileExists{generated/findings.tex}{\input{generated/findings.tex}}{结果由复现脚本生成。}
+
+\begin{figure}[ht]
+\centering
+\IfFileExists{figures/risk_direction_favorable.png}{\includegraphics[width=.86\textwidth]{figures/risk_direction_favorable.png}}{}
+\caption{方向可认证的大偏移场景：平均目标风险变化。}
+\label{fig:risk-fav}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\IfFileExists{figures/harm_null_update.png}{\includegraphics[width=.86\textwidth]{figures/harm_null_update.png}}{}
+\caption{历史模型正确场景：有害更新比例。虚线为5\%参考。}
+\label{fig:harm-null}
+\end{figure}
+
+\section{ELAIA-1六医院最终MCSA审计}
+使用公开RCT Bench处理版ELAIA-1数据，共6030名参加者和六家医院。对每家目标医院，其余医院资料拆为历史模型训练、候选训练和来源认证；目标医院一半只提供开发协变量，另一半处理和结局完全保留用于审计。
+
+主规格预先设定finite-sieve半径$R=1$，并把医院族错误率控制为$0.05/6$。同时报告$R=0.5,2$及未调整$\alpha=0.05$敏感性。方向字典包含预测更新和只作用于来源协变量支持矩形内的更新。来源随机试验的二元结局给出有界伪响应，置信球同时计入线性函数类不平衡、来源噪声、目标矩误差和Gram误差。
+
+\IfFileExists{generated/elaia_mcsa.tex}{\input{generated/elaia_mcsa.tex}}{}
+
+\paragraph{实证解释。}
+\IfFileExists{generated/elaia_findings.tex}{\input{generated/elaia_findings.tex}}{结果由审计脚本生成。}
+该分析是真实地理留出，但模型冻结发生在回顾性分析流程中，不能描述为历史部署后迎来新队列的前瞻验证。所用CSV为公共处理版，程序核验其SHA256并在数据清单中说明与官方Dryad记录的关系。
+
+\section{与最近工作的区别}
+本文不把以下内容作为首创：Riesz/AML、Q-aggregation、局部风险置信场、dShrink、悲观下界最大化或证据不足时保留基线。
+
+相对于一般数据移位风险差估计，本文处理的是潜在CATE平方风险、来源标签和目标无标签的两样本结构，并允许目标独有区域产生尖锐不可识别项。相对于Causal Q-Aggregation，本文的$\log M/n$代价还受到迁移模量、目标样本和安全约束影响。相对于Local Population-Risk Certificates，本文的置信对象不是直接可观测损失，而是需要因果识别和迁移校准的方向信号。相对于dShrink，本文的目标不是参数估计的平均二次风险支配，而是相对已锁定历史模型的有害更新概率及同损失最小最大遗憾。
+
+\section{讨论}
+理论优势与每个固定DGP下的平均性能优势并不等价。一个程序可以最小化函数类中的最坏认证半径，却在某个有利分布下因保守而损失平均收益。因此本文预先规定理论有利区，也完整报告良好重叠、零改善和错设区。模拟优势只有在同预算、同候选和同安全水平下的配对区间支持时才被表述为优势。
+
+finite-sieve matching theorem已经把抽象置信事件落实为可计算权重与联合半径，但未知函数类半径仍需科学预设或self-similarity等适应条件。RKHS推广的本质是把有限维不平衡替换为核均值嵌入的对偶范数；其诚实性取决于半径和核类是否有效，而不是由交叉验证自动保证。
+
+\section{结论}
+本文给出历史CATE模型安全迁移更新的一条统一理论：目标独有区域决定方向识别损失；共同支持内的两样本因果实验决定信息模量；方向选择产生额外复杂度；诚实置信半径经鲁棒更新转化为同一损失下平方模量阶的minimax regret。数值和实证不以普遍支配为目标，而检验这种结构优势是否在“全局难迁移但局部方向可认证”的区域出现，并如实报告其边界。
+
+\appendix
+\section{主要证明补充}
+\subsection{finite-sieve误差分解}
+将式\eqref{eq:sieve}代入式\eqref{eq:pseudo}，并在$\widehat M_Q\beta$处加减，得到
+\[
+\widehat B_W-B
+=-D_W\beta+n^{-1}W^\top\varepsilon+R_{K,W}+R_{\delta,W}+R_{Q,W}.
+\]
+Cauchy--Schwarz给出
+\[
+\norm{G^{-1/2}D_W\beta}
+\le R\norm{G^{-1/2}D_W}_{\op}.
+\]
+若$\norm{r_K}_\infty\le a_K$，则近似误差由$a_K$乘以目标方向均值和来源权重绝对和控制。交叉拟合后，nuisance条件均值误差由乘积率控制。
+
+\subsection{正交nuisance余项}
+令$\phi_0$为真实nuisance构成的伪响应。条件于训练折，展开$1/\widehat e-1/e$及对照项。纯结果回归误差与纯倾向误差的一阶项消去，仅保留二者乘积。以方向Riesz范数乘Cauchy--Schwarz即得
+\[
+\norm{G^{-1/2}E_P[\widehat\gamma_V(\widehat\phi-\phi_0)]}
+\le C\Gamma_V
+\norm{\widehat e-e}_{P,2}
+\max_a\norm{\widehat m_a-m_a}_{P,2}.
+\]
+
+\subsection{稠密与稀疏方向下界}
+稠密$d$维结果由Gaussian均值向量的packing/Bayes风险下界及二次遗憾恒等式得到。对$M$条稀疏方向，在零假设与均匀混合的单活动方向备择间计算$\chi^2$散度：
+\[
+\chi^2=\frac{\exp(\Delta^2/s^2)-1}{M}.
+\]
+若规则在零点错误更新概率不超过$\alpha$、在每个备择的功效至少为$1-\beta$，则
+\[
+\Delta\ge s\sqrt{\log\{1+4M(1-\alpha-\beta)^2\}}.
+\]
+同时单侧最大值规则达到相同$\sqrt{\log M}$阶。
+
+\section*{数据与代码}
+八方法模拟、逐次结果、MCSA核心实现和六医院审计代码随论文提供。处理版ELAIA-1数据可从
+\url{https://raw.githubusercontent.com/syl051088/RCT_Bench/refs/heads/main/cleaned_data/Non_Clustered_RCT/trial3.csv}
+取得；程序核验SHA256。官方数据记录为
+\url{https://doi.org/10.5061/dryad.4f4qrfj95}。
+
+\begin{thebibliography}{99}
+\bibitem{ChernozhukovDML} Chernozhukov, V. et al. (2018). Double/debiased machine learning for treatment and structural parameters. \emph{The Econometrics Journal}.
+\bibitem{HirshbergWager} Hirshberg, D. A. and Wager, S. (2021). Augmented minimax linear estimation. \emph{Annals of Statistics}.
+\bibitem{KimCOKE} Kim, S.-J. et al. (2025/2026). Transfer learning of CATE with kernel ridge regression. arXiv:2502.11331; accepted version information should be verified at submission.
+\bibitem{LanSyrgkanis} Lan, H. and Syrgkanis, V. (2024). Causal Q-aggregation for CATE model selection. \emph{AISTATS}.
+\bibitem{MouEtAl} Mou, W., Ding, P., Wainwright, M. J. and Bartlett, P. (2023). Kernel-based off-policy estimation without overlap: instance optimality beyond semiparametric efficiency. arXiv:2301.06240.
+\bibitem{QiuEtAl} Qiu, H., Tchetgen Tchetgen, E. and Dobriban, E. (2024). Efficient and multiply robust risk estimation under general forms of dataset shift. \emph{Annals of Statistics}.
+\bibitem{Song} Song, M. (2026). On local population-risk certificates. arXiv:2606.19147.
+\bibitem{WangLin} Wang, R. and Lin, X. (2026). Divide-and-shrink: an efficient and heterogeneity-agnostic approach for transfer estimation using summary statistics. arXiv:2606.08981.
+\end{thebibliography}
+
+\end{document}
