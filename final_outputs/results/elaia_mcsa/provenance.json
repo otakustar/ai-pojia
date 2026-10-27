@@ -1,0 +1,7 @@
+{
+  "url": "https://raw.githubusercontent.com/syl051088/RCT_Bench/refs/heads/main/cleaned_data/Non_Clustered_RCT/trial3.csv",
+  "sha256": "7c9911d1db66ffc6cad3b654b3dece2394d67d14f56a8a35eabeafe8885a20eb",
+  "bytes": 719402,
+  "primary_specification": "R=1; familywise alpha=.05/6",
+  "limitation": "retrospective geographic holdout using processed RCT Bench data"
+}

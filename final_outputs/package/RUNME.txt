@@ -1,0 +1,3 @@
+pip install -r requirements.txt
+python benchmark.py --reps 300 --sizes 800 1600 3200 --out results/eight_method
+python elaia_mcsa.py --data ELAIA1_RCTBench_processed.csv --out results/elaia_mcsa
