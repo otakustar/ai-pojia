@@ -1,0 +1,105 @@
+name: MCSA equal-budget benchmark
+
+on:
+  push:
+    branches: [mcsa-eight-benchmark-20261027]
+    paths:
+      - 'mcsa_benchmark/**'
+      - '.github/workflows/mcsa-benchmark.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mcsa_benchmark/**'
+      - '.github/workflows/mcsa-benchmark.yml'
+  workflow_dispatch:
+    inputs:
+      reps:
+        description: Monte Carlo repetitions per design
+        required: false
+        default: '300'
+
+jobs:
+  full-study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: mcsa_benchmark/requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-xetex texlive-lang-chinese texlive-latex-extra fonts-noto-cjk zip
+
+      - name: Install Python dependencies
+        run: pip install -r mcsa_benchmark/requirements.txt
+
+      - name: Apply deterministic benchmark corrections
+        run: python mcsa_benchmark/patch_benchmark.py
+
+      - name: Syntax and smoke checks
+        run: |
+          python -m py_compile mcsa_benchmark/benchmark.py mcsa_benchmark/elaia_mcsa.py mcsa_benchmark/make_tables.py mcsa_benchmark/make_real_table.py
+          python mcsa_benchmark/benchmark.py --reps 2 --sizes 200 --out mcsa_benchmark/results/smoke
+
+      - name: Run equal-budget eight-method benchmark
+        env:
+          REPS: ${{ github.event.inputs.reps || '300' }}
+        run: |
+          python mcsa_benchmark/benchmark.py --reps "$REPS" --sizes 800 1600 3200 --out mcsa_benchmark/results/eight_method
+
+      - name: Run final MCSA six-hospital audit
+        run: |
+          python mcsa_benchmark/elaia_mcsa.py --data mcsa_benchmark/data/trial3.csv --out mcsa_benchmark/results/elaia_mcsa
+
+      - name: Generate tables and figures
+        env:
+          MPLBACKEND: Agg
+        run: |
+          python mcsa_benchmark/make_tables.py --results mcsa_benchmark/results/eight_method --tables mcsa_benchmark/paper/generated --figures mcsa_benchmark/paper/figures
+          python mcsa_benchmark/make_real_table.py --input mcsa_benchmark/results/elaia_mcsa/elaia_mcsa_results.csv --output mcsa_benchmark/paper/generated/elaia_mcsa.tex
+
+      - name: Compile Chinese paper
+        working-directory: mcsa_benchmark/paper
+        run: |
+          xelatex -interaction=nonstopmode -halt-on-error main_cn.tex
+          xelatex -interaction=nonstopmode -halt-on-error main_cn.tex
+          test -s main_cn.pdf
+
+      - name: Build reproducibility package
+        run: |
+          mkdir -p mcsa_benchmark/package
+          cp mcsa_benchmark/paper/main_cn.pdf mcsa_benchmark/package/MCSA_Chinese_Manuscript.pdf
+          cp mcsa_benchmark/paper/main_cn.tex mcsa_benchmark/package/
+          cp -R mcsa_benchmark/paper/generated mcsa_benchmark/package/
+          cp -R mcsa_benchmark/paper/figures mcsa_benchmark/package/
+          cp mcsa_benchmark/benchmark.py mcsa_benchmark/elaia_mcsa.py mcsa_benchmark/make_tables.py mcsa_benchmark/make_real_table.py mcsa_benchmark/requirements.txt mcsa_benchmark/package/
+          cp -R mcsa_benchmark/results/eight_method mcsa_benchmark/package/
+          cp -R mcsa_benchmark/results/elaia_mcsa mcsa_benchmark/package/
+          cp mcsa_benchmark/data/trial3.csv mcsa_benchmark/package/ELAIA1_RCTBench_processed.csv
+          cat > mcsa_benchmark/package/RUNME.txt <<'EOF'
+          pip install -r requirements.txt
+          python benchmark.py --reps 300 --sizes 800 1600 3200 --out results/eight_method
+          python elaia_mcsa.py --data ELAIA1_RCTBench_processed.csv --out results/elaia_mcsa
+          EOF
+          cd mcsa_benchmark && zip -r MCSA_complete_research_package.zip package
+
+      - name: Upload complete artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcsa-complete-study
+          path: |
+            mcsa_benchmark/MCSA_complete_research_package.zip
+            mcsa_benchmark/package/MCSA_Chinese_Manuscript.pdf
+            mcsa_benchmark/results/eight_method/*.csv
+            mcsa_benchmark/results/eight_method/*.json
+            mcsa_benchmark/results/elaia_mcsa/*.csv
+            mcsa_benchmark/results/elaia_mcsa/*.json
+          retention-days: 30

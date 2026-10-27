@@ -1,0 +1,35 @@
+{
+  "K": 24,
+  "alpha": 0.05,
+  "target_ratio": 2.0,
+  "reps": 300,
+  "seed": 20261027,
+  "class_radius": 1.3,
+  "residual_bound": 0.75,
+  "max_direction": 0.7,
+  "top_d": 3,
+  "ratio_cap": 40.0,
+  "sizes": [
+    800,
+    1600,
+    3200
+  ],
+  "scenarios": [
+    "direction_favorable",
+    "regular_overlap",
+    "null_update",
+    "radius_misspecified"
+  ],
+  "methods": [
+    "no_update",
+    "unrestricted_retrain",
+    "transport_aipw_safe",
+    "aml_point",
+    "best_single_safe",
+    "qaggregation_safe",
+    "krr_transfer_safe",
+    "mcsa"
+  ],
+  "elapsed_sec": 59.20049009999997,
+  "important_note": "Causal Q-aggregation uses the official Q-aggregation objective adapted with target weights. krr_transfer_safe is a COKE-style KRR transfer comparator, not an exact reproduction of COKE. unrestricted_retrain and aml_point are intentionally unsafe performance references."
+}

@@ -1,0 +1,55 @@
+{
+  "favorable_ci_support_mcsa": 2,
+  "favorable_ci_against_mcsa": 7,
+  "favorable_total_comparisons": 21,
+  "max_harm_theory_scenarios": 0.17,
+  "max_harm_misspecified": 0.006666666666666667,
+  "best_direction_favorable_800": {
+    "method": "aml_point",
+    "mean_risk_change": -0.0029922741426791064
+  },
+  "best_direction_favorable_1600": {
+    "method": "aml_point",
+    "mean_risk_change": -0.011269524565842374
+  },
+  "best_direction_favorable_3200": {
+    "method": "aml_point",
+    "mean_risk_change": -0.016310624270536957
+  },
+  "best_regular_overlap_800": {
+    "method": "aml_point",
+    "mean_risk_change": -0.007163632098266757
+  },
+  "best_regular_overlap_1600": {
+    "method": "aml_point",
+    "mean_risk_change": -0.012946668443651712
+  },
+  "best_regular_overlap_3200": {
+    "method": "aml_point",
+    "mean_risk_change": -0.020549359695189336
+  },
+  "best_null_update_800": {
+    "method": "best_single_safe",
+    "mean_risk_change": 0.0
+  },
+  "best_null_update_1600": {
+    "method": "best_single_safe",
+    "mean_risk_change": 0.0
+  },
+  "best_null_update_3200": {
+    "method": "best_single_safe",
+    "mean_risk_change": 0.0
+  },
+  "best_radius_misspecified_800": {
+    "method": "unrestricted_retrain",
+    "mean_risk_change": -0.03468426984647941
+  },
+  "best_radius_misspecified_1600": {
+    "method": "transport_aipw_safe",
+    "mean_risk_change": -0.03856585835854094
+  },
+  "best_radius_misspecified_3200": {
+    "method": "unrestricted_retrain",
+    "mean_risk_change": -0.04765135186504287
+  }
+}

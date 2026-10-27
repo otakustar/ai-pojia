@@ -1,0 +1,11 @@
+{
+  "pdf_pages": 16,
+  "mcsa_nonzero_favorable_cells": 0,
+  "mcsa_nonzero_all_cells": 2,
+  "mcsa_primary_hospital_updates": 0,
+  "max_harm_deployable_theory_conditions": 0.17,
+  "method_max_harm_deployable_theory_conditions": "transport_aipw_safe",
+  "fav_pair_ci_support_mcsa": 2,
+  "fav_pair_ci_against_mcsa": 7,
+  "fav_pair_total": 24
+}
