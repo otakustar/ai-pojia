@@ -6,6 +6,11 @@ on:
     paths:
       - 'mcsa_benchmark/**'
       - '.github/workflows/mcsa-benchmark.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mcsa_benchmark/**'
+      - '.github/workflows/mcsa-benchmark.yml'
   workflow_dispatch:
     inputs:
       reps:
@@ -81,7 +86,6 @@ jobs:
           cp mcsa_benchmark/data/trial3.csv mcsa_benchmark/package/ELAIA1_RCTBench_processed.csv
           cat > mcsa_benchmark/package/RUNME.txt <<'EOF'
           pip install -r requirements.txt
-          python patch_benchmark.py   # only needed on the repository source; artifact benchmark.py is already patched
           python benchmark.py --reps 300 --sizes 800 1600 3200 --out results/eight_method
           python elaia_mcsa.py --data ELAIA1_RCTBench_processed.csv --out results/elaia_mcsa
           EOF
